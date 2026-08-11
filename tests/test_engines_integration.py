@@ -17,7 +17,7 @@ pytestmark = pytest.mark.slow
 
 def _find_arabic_font():
     font_dir = r"C:\Windows\Fonts"
-    candidates = ["arial.ttf", "arialuni.ttf", "tahoma.ttf", "segoeui.ttf", "times.ttf"]
+    candidates = ["tahoma.ttf", "arial.ttf", "arialuni.ttf", "segoeui.ttf", "times.ttf"]
     for name in candidates:
         path = os.path.join(font_dir, name)
         if os.path.exists(path):
@@ -49,11 +49,11 @@ def test_paddle_ocr_reads_urdu_image(tmp_path):
     text = "\u067e\u0627\u06a9\u0633\u062a\u0627\u0646"  # Ù¾Ø§Ú©Ø³ØªØ§Ù†
     try:
         display_text = get_display(arabic_reshaper.reshape(text))
-        img = Image.new("RGB", (400, 120), "white")
+        img = Image.new("RGB", (800, 180), "white")
         draw = ImageDraw.Draw(img)
         draw.text(
-            (10, 30), display_text, fill="black",
-            font=ImageFont.truetype(font_path, 48),
+            (20, 40), display_text, fill="black",
+            font=ImageFont.truetype(font_path, 72),
         )
         img_path = tmp_path / "urdu.png"
         img.save(str(img_path))

@@ -25,10 +25,11 @@ class PaddleOCREngine(OCREngine):
 
             try:
                 self._ocr = PaddleOCR(
-                    use_angle_cls=True, lang=self.lang, show_log=False
+                    lang=self.lang, use_textline_orientation=True, enable_mkldnn=False
                 )
-            except TypeError:
-                self._ocr = PaddleOCR(lang=self.lang)
+            except (TypeError, ValueError):
+                # PaddleOCR 2.x: use_textline_orientation / enable_mkldnn may not exist
+                self._ocr = PaddleOCR(lang=self.lang, enable_mkldnn=False)
         return self._ocr
 
     @staticmethod
@@ -52,6 +53,6 @@ class PaddleOCREngine(OCREngine):
         ocr = self._get_ocr()
         try:
             result = ocr.ocr(image_path, cls=True)
-        except TypeError:
+        except (TypeError, ValueError):
             result = ocr.ocr(image_path)
         return self._parse_result(result)
