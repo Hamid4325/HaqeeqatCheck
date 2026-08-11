@@ -83,3 +83,53 @@ def strip_bidi_marks(text: str) -> str:
     """Remove bidi isolate control characters (for consumers that can't handle
     them)."""
     return text.replace(LRI, "").replace(RLI, "").replace(PDI, "")
+
+
+def sample_video_frames(
+    video_path: str,
+    output_dir: str,
+    interval_sec: int = 5,
+) -> List[str]:
+    """Extract one JPEG frame every interval_sec seconds; return saved paths.
+
+    Uses cv2.VideoCapture (OpenCV is already a PaddleOCR dependency) so no
+    extra dependency is introduced."""
+    import cv2
+
+    cap = cv2.VideoCapture(video_path)
+    saved: List[str] = []
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if not fps or fps <= 0:
+            fps = 25.0
+        frame_interval = max(1, int(round(fps * interval_sec)))
+        index = 0
+        count = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if index % frame_interval == 0:
+                out_path = os.path.join(output_dir, f"frame_{count:05d}.jpg")
+                if cv2.imwrite(out_path, frame):
+                    saved.append(out_path)
+                count += 1
+            index += 1
+    finally:
+        cap.release()
+    return saved
+
+
+def video_duration_sec(video_path: str) -> float | None:
+    """Return video duration in seconds, or None if undeterminable."""
+    import cv2
+
+    cap = cv2.VideoCapture(video_path)
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        if fps and count and fps > 0 and count > 0:
+            return round(count / fps, 2)
+    finally:
+        cap.release()
+    return None

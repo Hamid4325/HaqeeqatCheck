@@ -52,3 +52,17 @@ class TestBidi:
 
     def test_ascii_only_is_not_wrapped(self):
         assert utils.bidi_safe_combine("a", "b") == "[AUDIO]: a\n[SCREEN TEXT]: b"
+
+
+class TestVideoSampling:
+    def test_samples_one_frame_per_interval(self, tmp_media, tmp_path):
+        video_path = tmp_media.video(seconds=2, fps=15)  # 30 frames
+        out_dir = tmp_path / "frames"
+        out_dir.mkdir()
+        frames = utils.sample_video_frames(video_path, str(out_dir), interval_sec=1)
+        assert len(frames) == 2  # t=0 and t=1
+        assert all(Path(f).exists() for f in frames)
+
+    def test_duration(self, tmp_media):
+        video_path = tmp_media.video(seconds=2, fps=15)
+        assert utils.video_duration_sec(video_path) == pytest.approx(2.0, abs=0.1)
