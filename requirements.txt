@@ -1,0 +1,6 @@
+openai-whisper
+paddleocr
+paddlepaddle
+moviepy
+opencv-python
+numpy

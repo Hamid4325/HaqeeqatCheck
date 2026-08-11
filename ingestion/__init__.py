@@ -1,0 +1,1 @@
+"""Haqeeqat Check ingestion module."""
