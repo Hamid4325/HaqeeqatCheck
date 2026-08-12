@@ -4,4 +4,4 @@ paddlepaddle
 moviepy
 opencv-python
 numpy
-easyocr
+ultralytics

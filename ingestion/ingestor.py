@@ -4,7 +4,7 @@ import os
 
 from ingestion import utils
 from ingestion.base import OCREngine, Transcriber, UnsupportedFormatError
-from ingestion.paddle_ocr_engine import PaddleOCREngine
+from ingestion.urdu_ocr import UTRNetOCREngine
 from ingestion.whisper_transcriber import WhisperTranscriber
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff"}
@@ -16,7 +16,7 @@ class HaqeeqatIngestor:
     """Extracts all text (speech + on-screen) from an image, audio, or video.
 
     Engines are swappable: pass any object implementing Transcriber / OCREngine
-    to the constructor. Defaults to WhisperTranscriber and PaddleOCREngine.
+    to the constructor. Defaults to WhisperTranscriber and UTRNetOCREngine.
     """
 
     def __init__(
@@ -26,7 +26,7 @@ class HaqeeqatIngestor:
         frames_interval_sec: int = 5,
     ):
         self.transcriber = transcriber or WhisperTranscriber()
-        self.ocr_engine = ocr_engine or PaddleOCREngine()
+        self.ocr_engine = ocr_engine or UTRNetOCREngine()
         self.frames_interval_sec = frames_interval_sec
 
     def ingest(self, path: str) -> dict:
