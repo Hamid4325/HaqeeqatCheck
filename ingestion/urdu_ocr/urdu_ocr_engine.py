@@ -52,17 +52,21 @@ class UTRNetOCREngine(OCREngine):
         self._detector = TextLineDetector(det_path, device=device)
 
     def extract_text(self, image_path: str) -> str:
+        return "\n".join(text for text, _ in self.extract_lines(image_path))
+
+    def extract_lines(self, image_path: str):
+        """Return ``[(text, confidence), ...]`` for each detected text line."""
         self._load_models()
         try:
             from PIL import Image
 
             image = Image.open(image_path).convert("RGB")
         except OSError:
-            return ""
+            return []
         crops = self._detector.detect(image)
         lines = []
         for crop in crops:
-            text = self._recognizer.recognize(crop)
+            text, confidence = self._recognizer.recognize_with_confidence(crop)
             if text.strip():
-                lines.append(text.strip())
-        return "\n".join(lines)
+                lines.append((text.strip(), confidence))
+        return lines

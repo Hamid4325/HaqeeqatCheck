@@ -24,9 +24,10 @@ class FakeTranscriber:
 class FakeOCREngine:
     lang = "ur"
 
-    def __init__(self, result=URDU_OCR):
+    def __init__(self, result=URDU_OCR, engine_used="FakeOCREngine"):
         self.result = result
         self.called_with = []
+        self.engine_used = engine_used
 
     def extract_text(self, path):
         self.called_with.append(path)
@@ -81,3 +82,13 @@ class TestIngest:
     def test_missing_file(self, tmp_path):
         with pytest.raises(UnsupportedFormatError):
             make_ingestor().ingest(str(tmp_path / "nope.mp4"))
+
+    def test_metadata_reports_engine_used(self, tmp_media):
+        report = make_ingestor().ingest(tmp_media.image())
+        assert report["metadata"]["ocr_engine_used"] == "FakeOCREngine"
+
+    def test_default_ocr_engine_is_cascade(self):
+        from ingestion.cascade_ocr import CascadeOCREngine
+
+        ingestor = HaqeeqatIngestor(FakeTranscriber())
+        assert isinstance(ingestor.ocr_engine, CascadeOCREngine)

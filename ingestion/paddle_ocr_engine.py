@@ -25,34 +25,56 @@ class PaddleOCREngine(OCREngine):
 
             try:
                 self._ocr = PaddleOCR(
-                    lang=self.lang, use_textline_orientation=True, enable_mkldnn=False
+                    lang=self.lang,
+                    use_textline_orientation=True,
+                    enable_mkldnn=False,
+                    text_det_limit_side_len=640,
                 )
             except (TypeError, ValueError):
                 # PaddleOCR 2.x: use_textline_orientation / enable_mkldnn may not exist
-                self._ocr = PaddleOCR(lang=self.lang, enable_mkldnn=False)
+                self._ocr = PaddleOCR(
+                    lang=self.lang, enable_mkldnn=False, text_det_limit_side_len=640
+                )
         return self._ocr
 
     @staticmethod
-    def _parse_result(result) -> str:
+    def _parse_lines(result) -> list:
+        """Return ``[(text, confidence), ...]`` from a PaddleOCR result.
+
+        Handles both PaddleOCR 2.x (list of ``[[box, (text, conf)], ...]``)
+        and 3.x (list of dict-like ``OCRResult`` with ``rec_texts`` /
+        ``rec_scores``) output shapes.
+        """
         lines = []
         if not result:
-            return ""
+            return lines
         for page in result:
             if not page:
+                continue
+            if hasattr(page, "get"):
+                texts = page.get("rec_texts") or []
+                scores = page.get("rec_scores") or []
+                for text, confidence in zip(texts, scores):
+                    if isinstance(text, str) and text.strip():
+                        lines.append((text.strip(), float(confidence)))
                 continue
             for item in page:
                 try:
                     text = item[1][0]
+                    confidence = item[1][1]
                 except (TypeError, IndexError, KeyError):
                     continue
                 if isinstance(text, str) and text.strip():
-                    lines.append(text.strip())
-        return "\n".join(lines)
+                    lines.append((text.strip(), float(confidence)))
+        return lines
 
     def extract_text(self, image_path: str) -> str:
+        return "\n".join(text for text, _ in self.extract_lines(image_path))
+
+    def extract_lines(self, image_path: str) -> list:
         ocr = self._get_ocr()
         try:
             result = ocr.ocr(image_path, cls=True)
         except (TypeError, ValueError):
             result = ocr.ocr(image_path)
-        return self._parse_result(result)
+        return self._parse_lines(result)

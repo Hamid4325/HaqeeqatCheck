@@ -46,12 +46,22 @@ class UTRNetRecognizer:
         self._model = model
 
     def recognize(self, pil_crop) -> str:
+        return self.recognize_with_confidence(pil_crop)[0]
+
+    def recognize_with_confidence(self, pil_crop):
+        """Return ``(text, mean_confidence)`` for one cropped line image.
+
+        Confidence is the mean over timesteps of the max softmax probability.
+        """
         import torch
 
         self._load()
         tensor = preprocess(pil_crop).unsqueeze(0).to(self.device)
         with torch.no_grad():
             preds = self._model(tensor)
+        probs = torch.softmax(preds, dim=2)
+        confidence = float(probs.max(dim=2).values.mean())
         preds_size = torch.IntTensor([preds.size(1)])
         _, preds_index = preds.max(2)
-        return self._converter.decode(preds_index.data, preds_size.data)[0]
+        text = self._converter.decode(preds_index.data, preds_size.data)[0]
+        return text, confidence
