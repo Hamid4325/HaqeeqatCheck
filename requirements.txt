@@ -5,3 +5,7 @@ moviepy
 opencv-python
 numpy
 ultralytics
+groq
+ddgs
+primp>=1.3.0
+python-dotenv
