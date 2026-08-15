@@ -127,3 +127,12 @@ def test_detects_urdu_ke_mutabiq_attribution():
 def test_detects_urdu_qa_qol_attribution():
     text = "مریم نواز کا قول ہے کہ تعلیم سب سے اہم ہے"
     assert detect_attribution(text) == "مریم نواز"
+
+
+def test_signature_with_rtl_format_wrappers():
+    text = (
+        "\u2067میرابس چلے\n"
+        "میرا بس چلے تو میں پیتہ نہیں\n"
+        "آپ کو کیا کیا دے دوں ! مریم نوز\u2069"
+    )
+    assert detect_attribution(text) == "مریم نوز"

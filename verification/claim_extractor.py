@@ -51,6 +51,7 @@ _COLON_QUOTE_RE = re.compile(
 _SIGNATURE_RE = re.compile(
     r"(?:—|–|-|!|۔)\s*([\w\u0600-\u06FF][\w\u0600-\u06FF\s]{1,40})\s*$"
 )
+_FORMAT_MARKS_RE = re.compile(r"[\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
 
 
 def detect_attribution(text: str) -> str | None:
@@ -60,6 +61,7 @@ def detect_attribution(text: str) -> str | None:
     quote ("— X", "…! X") on the last non-empty line, and a colon-quote
     prefix ("X: "). The candidate is a hint only, never trusted as truth.
     """
+    text = _FORMAT_MARKS_RE.sub("", text or "")
     explicit = _URDU_EXPLICIT_RE.search(text or "") or _ENGLISH_EXPLICIT_RE.search(
         text or ""
     )
