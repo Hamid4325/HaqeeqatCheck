@@ -16,3 +16,10 @@ def test_end_to_end_verdict_for_urdu_claim():
     assert 0.0 <= result.confidence <= 1.0
     assert result.reasoning_urdu.strip()
     assert result.evidence
+
+
+def test_attributed_lyric_is_checkworthy():
+    lyric = "میرا بس چلے\nمیرا بس چلے تو میں پیتہ نہیں\nآپ کو کیا کیا دے دوں! مریم نوز"
+    result = VerdictAgent().run(lyric)
+    assert result.is_checkworthy is True
+    assert result.verdict is not None
