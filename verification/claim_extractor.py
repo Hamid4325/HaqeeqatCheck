@@ -91,7 +91,7 @@ class ClaimExtractor:
         ]
         parsed = self._chat(messages)
         if parsed is None:
-            return SearchableClaim(is_checkworthy=False)
+            return SearchableClaim(is_checkworthy=name is not None)
         return SearchableClaim(
             is_checkworthy=parsed["is_checkworthy"] or name is not None,
             urdu_claim=parsed["urdu_claim"],

@@ -109,3 +109,10 @@ def test_attribution_hint_in_user_message():
     user_content = fake.calls[0]["messages"][-1]["content"]
     assert "HINT:" in user_content
     assert "مریم نواز" in user_content
+
+
+def test_parse_failure_keeps_attributed_quote_checkworthy():
+    fake = FakeGroqClient(["bad", "also bad", "still bad"])
+    text = "میرا بس چلے\nمیرا بس چلے تو میں پیتہ نہیں\nآپ کو کیا کیا دے دوں! مریم نوز"
+    result = ClaimExtractor(groq_client=fake).extract(text)
+    assert result.is_checkworthy is True
