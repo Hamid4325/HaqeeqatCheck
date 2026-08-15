@@ -115,4 +115,15 @@ def test_parse_failure_keeps_attributed_quote_checkworthy():
     fake = FakeGroqClient(["bad", "also bad", "still bad"])
     text = "میرا بس چلے\nمیرا بس چلے تو میں پیتہ نہیں\nآپ کو کیا کیا دے دوں! مریم نوز"
     result = ClaimExtractor(groq_client=fake).extract(text)
+    assert len(fake.calls) == 3
     assert result.is_checkworthy is True
+
+
+def test_detects_urdu_ke_mutabiq_attribution():
+    text = "وزیرِ اعلیٰ پنجاب کے مطابق، بارشوں سے تین افراد ہلاک ہوئے"
+    assert detect_attribution(text) == "وزیرِ اعلیٰ پنجاب"
+
+
+def test_detects_urdu_qa_qol_attribution():
+    text = "مریم نواز کا قول ہے کہ تعلیم سب سے اہم ہے"
+    assert detect_attribution(text) == "مریم نواز"

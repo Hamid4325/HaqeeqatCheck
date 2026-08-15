@@ -31,14 +31,14 @@ RULES:
    never add your own interpretation.
 5. "english_claim": a faithful English translation of urdu_claim, written for
    international web search (mention "Pakistan" if the claim concerns it).
-6. "is_checkworthy": true ONLY if a verifiable claim passes rules 1-5.
+6. "is_checkworthy": true ONLY if a verifiable claim passes rules 1-5 (including 2b).
 
 Respond ONLY with a JSON object, exactly this shape (no prose, no markdown):
 {"is_checkworthy": true, "urdu_claim": "...", "english_claim": "..."}"""
 
 _URDU_EXPLICIT_RE = re.compile(
     r"([\u0600-\u06FF][\u0600-\u06FF\s]{2,40}?)\s+"
-    r"(?:نے\s+کہا|کہتی\s+ہیں|کہتے\s+ہیں|کہا\s+کہ)"
+    r"(?:نے\s+کہا|کہتی\s+ہیں|کہتے\s+ہیں|کہا\s+کہ|کے\s+مطابق|کا\s+قول)"
 )
 _ENGLISH_EXPLICIT_RE = re.compile(
     r"([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})\s+"
@@ -102,11 +102,11 @@ class ClaimExtractor:
         content = f"<text>\n{text}\n</text>"
         if name:
             content += (
-                '\n\nHINT: the text appears to present a statement as the words '
-                'of a person (possible name: "%s"). Extract the claim as an '
-                'attribution question: "کیا <person> نے یہ کہا؟" / '
-                '"Did <person> say this?", preserving the exact wording of the '
-                "statement." % name
+                f'\n\nHINT: the text appears to present a statement as the words '
+                f'of a person (possible name: "{name}"). Extract the claim as an '
+                f'attribution question: "کیا <person> نے یہ کہا؟" / '
+                f'"Did <person> say this?", preserving the exact wording of the '
+                f"statement."
             )
         return content
 
