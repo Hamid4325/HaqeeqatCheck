@@ -17,6 +17,13 @@ RULES:
 2. IGNORE as not check-worthy: greetings, pleasantries, personal opinions,
    poetry, personal stories or experiences, pure questions, jokes, and any
    content with no factual assertion.
+2b. EXCEPTION (attributed quotes): a statement presented as the words of a
+   named public figure — explicit attribution ("X said", "X نے کہا"), a signed
+   quote ("— X", "…! X"), or "X: ..." — IS check-worthy even if poetic,
+   lyrical, or humorous, because "did X actually say this?" is a verifiable
+   fact. Extract such claims as attribution questions: urdu_claim "کیا <X> نے
+   یہ کہا: ...؟" and english_claim "Did <X> say: '...'?" preserving the exact
+   wording of the statement.
 3. If several claims exist, extract only the SINGLE most viral or important one.
 4. "urdu_claim": the claim as ONE concise sentence, ALWAYS written in proper
    Urdu script (اردو رسم الخط). If the original is in Roman Urdu, transliterate
@@ -77,18 +84,31 @@ class ClaimExtractor:
         self.max_retries = max_retries
 
     def extract(self, text: str) -> SearchableClaim:
+        name = detect_attribution(text)
         messages = [
             {"role": "system", "content": CLAIM_EXTRACTION_SYSTEM_PROMPT},
-            {"role": "user", "content": f"<text>\n{text}\n</text>"},
+            {"role": "user", "content": self._user_content(text, name)},
         ]
         parsed = self._chat(messages)
         if parsed is None:
             return SearchableClaim(is_checkworthy=False)
         return SearchableClaim(
-            is_checkworthy=parsed["is_checkworthy"],
+            is_checkworthy=parsed["is_checkworthy"] or name is not None,
             urdu_claim=parsed["urdu_claim"],
             english_claim=parsed["english_claim"],
         )
+
+    def _user_content(self, text: str, name: str | None) -> str:
+        content = f"<text>\n{text}\n</text>"
+        if name:
+            content += (
+                '\n\nHINT: the text appears to present a statement as the words '
+                'of a person (possible name: "%s"). Extract the claim as an '
+                'attribution question: "کیا <person> نے یہ کہا؟" / '
+                '"Did <person> say this?", preserving the exact wording of the '
+                "statement." % name
+            )
+        return content
 
     def _chat(self, messages):
         client = self._get_client()

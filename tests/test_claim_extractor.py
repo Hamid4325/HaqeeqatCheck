@@ -89,3 +89,23 @@ def test_returns_none_for_plain_news_text():
 
 def test_returns_none_for_greeting():
     assert detect_attribution("السلام علیکم") is None
+
+
+def test_prompt_requires_attributed_quote_check():
+    assert "attributed quote" in CLAIM_EXTRACTION_SYSTEM_PROMPT
+    assert "did X actually say this" in CLAIM_EXTRACTION_SYSTEM_PROMPT
+
+
+def test_forces_checkworthy_for_attributed_quote():
+    fake = FakeGroqClient([VALID.replace("true", "false")])
+    text = "میرا بس چلے\nمیرا بس چلے تو میں پیتہ نہیں\nآپ کو کیا کیا دے دوں! مریم نوز"
+    result = ClaimExtractor(groq_client=fake).extract(text)
+    assert result.is_checkworthy is True
+
+
+def test_attribution_hint_in_user_message():
+    fake = FakeGroqClient([VALID])
+    ClaimExtractor(groq_client=fake).extract("میرا بس چلے — مریم نواز")
+    user_content = fake.calls[0]["messages"][-1]["content"]
+    assert "HINT:" in user_content
+    assert "مریم نواز" in user_content
