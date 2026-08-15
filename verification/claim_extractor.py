@@ -29,6 +29,46 @@ RULES:
 Respond ONLY with a JSON object, exactly this shape (no prose, no markdown):
 {"is_checkworthy": true, "urdu_claim": "...", "english_claim": "..."}"""
 
+_URDU_EXPLICIT_RE = re.compile(
+    r"([\u0600-\u06FF][\u0600-\u06FF\s]{2,40}?)\s+"
+    r"(?:نے\s+کہا|کہتی\s+ہیں|کہتے\s+ہیں|کہا\s+کہ)"
+)
+_ENGLISH_EXPLICIT_RE = re.compile(
+    r"([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,3})\s+"
+    r"(?:said|says|stated|told|claimed)\b"
+)
+_COLON_QUOTE_RE = re.compile(
+    r"^([A-Za-z\u0600-\u06FF][\w\u0600-\u06FF\s]{1,40}):\s*[\"\u201c«]",
+    re.MULTILINE,
+)
+_SIGNATURE_RE = re.compile(
+    r"(?:—|–|-|!|۔)\s*([\w\u0600-\u06FF][\w\u0600-\u06FF\s]{1,40})\s*$"
+)
+
+
+def detect_attribution(text: str) -> str | None:
+    """Return a candidate name if ``text`` exhibits attribution structure.
+
+    Recognises explicit verbal attribution ("X said", "X نے کہا"), a signed
+    quote ("— X", "…! X") on the last non-empty line, and a colon-quote
+    prefix ("X: "). The candidate is a hint only, never trusted as truth.
+    """
+    explicit = _URDU_EXPLICIT_RE.search(text or "") or _ENGLISH_EXPLICIT_RE.search(
+        text or ""
+    )
+    if explicit:
+        return explicit.group(1).strip()
+    colon = _COLON_QUOTE_RE.search(text or "")
+    if colon:
+        return colon.group(1).strip()
+    for line in reversed((text or "").splitlines()):
+        if line.strip():
+            signature = _SIGNATURE_RE.search(line.strip())
+            if signature:
+                return signature.group(1).strip()
+            return None
+    return None
+
 
 class ClaimExtractor:
     def __init__(self, groq_client=None, model=MODEL_ID, max_retries=MAX_RETRIES):

@@ -55,3 +55,37 @@ def test_missing_api_key_raises_friendly_error(monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="GROQ_API_KEY"):
         ClaimExtractor().extract("some text")
+
+
+from verification.claim_extractor import detect_attribution
+
+
+def test_detects_urdu_explicit_attribution():
+    text = "مریم نواز نے کہا کہ سندھ میں بارش سے تین افراد ہلاک ہو گئے"
+    assert detect_attribution(text) == "مریم نواز"
+
+
+def test_detects_english_explicit_attribution():
+    text = "Maryam Nawaz said that she will visit Lahore."
+    assert detect_attribution(text) == "Maryam Nawaz"
+
+
+def test_detects_dash_signature():
+    assert detect_attribution("میرا بس چلے۔ — مریم نواز") == "مریم نواز"
+
+
+def test_detects_exclamation_signature_with_ocr_noise():
+    text = "میرا بس چلے\nمیرا بس چلے تو میں پیتے نہیں\nآپ کو کیا کیا دے دوں! مریم نوز"
+    assert detect_attribution(text) == "مریم نوز"
+
+
+def test_detects_colon_quote_prefix():
+    assert detect_attribution('مریم نواز: "یہ سب جھوٹ ہے"') == "مریم نواز"
+
+
+def test_returns_none_for_plain_news_text():
+    assert detect_attribution("سندھ میں بارش سے تین افراد ہلاک ہو گئے") is None
+
+
+def test_returns_none_for_greeting():
+    assert detect_attribution("السلام علیکم") is None
