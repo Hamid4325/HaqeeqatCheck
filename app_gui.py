@@ -3,6 +3,7 @@
 Run locally with:  streamlit run app_gui.py
 """
 
+import html
 import os
 import subprocess
 import sys
@@ -83,7 +84,7 @@ def main(st=None, ingestor=None, agent=None):
             result = agent.run(text)
 
     with st.expander("استخراج شدہ متن / Extracted text", expanded=True):
-        st.code(text)
+        st.markdown(_extracted_text_html(text), unsafe_allow_html=True)
 
     if not result.is_checkworthy:
         st.info("کوئی قابلِ تصدیق دعویٰ نہیں / No checkworthy claim found")
@@ -134,9 +135,22 @@ def _inject_css(st):
             font-size: 16px;
             margin-top: 4px;
         }
+        .extracted-text {
+            direction: rtl;
+            font-family: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", serif;
+            font-size: 20px;
+            line-height: 1.9;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
         </style>""",
         unsafe_allow_html=True,
     )
+
+
+def _extracted_text_html(text):
+    return f'<div class="extracted-text">{html.escape(text)}</div>'
 
 
 def _bilingual_block(label, urdu, english):

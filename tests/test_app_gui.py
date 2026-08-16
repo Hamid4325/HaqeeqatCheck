@@ -195,6 +195,18 @@ def test_text_mode_passes_text_to_agent():
     assert agent.texts == ["سندھ میں بارش"]
 
 
+def test_extracted_text_renders_wrapped_not_code_block():
+    stub = FakeST()
+    stub.text = "لمبی متن\nدوسری لائن"
+    agent = FakeAgent(_result(Verdict.SACHA))
+    app_gui.main(st=stub, agent=agent)
+    assert not any(name == "code" for name, _, _ in stub.log)
+    assert any(
+        "extracted-text" in text and "لمبی متن" in text
+        for text in _markdown_texts(stub)
+    )
+
+
 def test_media_mode_writes_temp_file_and_ingests(monkeypatch):
     stub = FakeST()
     stub.mode = 1
