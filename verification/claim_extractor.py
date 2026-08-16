@@ -2,7 +2,7 @@ import json
 import re
 
 from .base import SearchableClaim
-from .config import MAX_RETRIES, MODEL_ID, get_api_key
+from .config import MAX_RETRIES, MODEL_ID, debug_enabled, get_api_key
 
 CLAIM_EXTRACTION_SYSTEM_PROMPT = """\
 You are the claim-extraction step of an Urdu fact-checking pipeline.
@@ -93,12 +93,21 @@ class ClaimExtractor:
         ]
         parsed = self._chat(messages)
         if parsed is None:
-            return SearchableClaim(is_checkworthy=name is not None)
-        return SearchableClaim(
+            checkworthy = name is not None
+            if debug_enabled():
+                print(f"DEBUG extractor parse-failed checkworthy={checkworthy}")
+            return SearchableClaim(is_checkworthy=checkworthy)
+        claim = SearchableClaim(
             is_checkworthy=parsed["is_checkworthy"] or name is not None,
             urdu_claim=parsed["urdu_claim"],
             english_claim=parsed["english_claim"],
         )
+        if debug_enabled():
+            print(
+                f"DEBUG extractor checkworthy={claim.is_checkworthy} "
+                f"urdu={claim.urdu_claim!r} english={claim.english_claim!r}"
+            )
+        return claim
 
     def _user_content(self, text: str, name: str | None) -> str:
         content = f"<text>\n{text}\n</text>"
@@ -130,7 +139,7 @@ class ClaimExtractor:
             response = client.chat.completions.create(
                 model=self.model,
                 messages=call_messages,
-                temperature=0.2,
+                temperature=0,
                 max_tokens=300,
                 response_format={"type": "json_object"},
             )

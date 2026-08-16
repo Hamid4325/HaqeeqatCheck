@@ -17,6 +17,7 @@ def test_extracts_checkworthy_claim():
     assert result.english_claim.startswith("Three people")
     assert fake.calls[0]["model"] == "llama-3.3-70b-versatile"
     assert fake.calls[0]["response_format"] == {"type": "json_object"}
+    assert fake.calls[0]["temperature"] == 0
 
 
 def test_prompt_requires_roman_urdu_transliteration():

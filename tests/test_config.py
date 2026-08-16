@@ -19,3 +19,18 @@ def test_default_model_id():
 
 def test_source_priority_is_strictly_ordered():
     assert config.SOURCE_PRIORITY == ["sochfactcheck.com", "afp.com", "dawn.com"]
+
+
+def test_jhoota_min_confidence_threshold():
+    assert config.JHOOOTA_MIN_CONFIDENCE == 0.5
+
+
+def test_debug_enabled(monkeypatch):
+    monkeypatch.delenv("HAQEEQAT_DEBUG", raising=False)
+    assert config.debug_enabled() is False
+    monkeypatch.setenv("HAQEEQAT_DEBUG", "1")
+    assert config.debug_enabled() is True
+    monkeypatch.setenv("HAQEEQAT_DEBUG", "yes")
+    assert config.debug_enabled() is True
+    monkeypatch.setenv("HAQEEQAT_DEBUG", "0")
+    assert config.debug_enabled() is False

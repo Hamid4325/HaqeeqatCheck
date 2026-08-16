@@ -9,6 +9,7 @@ MAX_QUERY_RESULTS = 5
 SEARCH_BACKEND = "auto"
 SOURCE_PRIORITY = ["sochfactcheck.com", "afp.com", "dawn.com"]
 NO_EVIDENCE_CONFIDENCE = 0.3
+JHOOOTA_MIN_CONFIDENCE = 0.5
 MIN_CONFIDENCE = 0.0
 MAX_CONFIDENCE = 1.0
 
@@ -28,3 +29,8 @@ if _env_path:
 
 def get_api_key() -> str:
     return os.environ.get("GROQ_API_KEY", "")
+
+
+def debug_enabled() -> bool:
+    """True when pipeline boundary tracing is requested (HAQEEQAT_DEBUG=1)."""
+    return os.environ.get("HAQEEQAT_DEBUG", "").lower() in {"1", "true", "yes", "on"}

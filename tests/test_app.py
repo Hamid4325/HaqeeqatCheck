@@ -45,6 +45,40 @@ def test_prints_verdict_and_sources(capsys):
     assert "sochfactcheck.com" in out
 
 
+def test_debug_flag_enables_trace(monkeypatch, capsys):
+    monkeypatch.delenv("HAQEEQAT_DEBUG", raising=False)
+    result = VerificationResult(
+        claim_urdu="دعویٰ",
+        claim_english="claim",
+        is_checkworthy=True,
+        verdict=Verdict.SACHA,
+        reasoning_urdu="وجوہات",
+        confidence=0.9,
+        evidence=[EvidenceItem("t", "https://sochfactcheck.com/a", "s", "sochfactcheck.com")],
+    )
+    code = main(["prog", "f.png", "--debug"], ingestor=FakeIngestor("x"), agent=_StubAgent(result))
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "DEBUG" in out
+    assert "sacha" in out
+    assert "sochfactcheck.com" in out
+
+
+def test_debug_flag_works_before_path(monkeypatch):
+    result = VerificationResult(
+        claim_urdu="دعویٰ",
+        claim_english="claim",
+        is_checkworthy=True,
+        verdict=Verdict.SACHA,
+        reasoning_urdu="وجوہات",
+        confidence=0.9,
+    )
+    code = main(
+        ["prog", "--debug", "f.png"], ingestor=FakeIngestor("x"), agent=_StubAgent(result)
+    )
+    assert code == 0
+
+
 class _StubAgent:
     def __init__(self, result):
         self.result = result

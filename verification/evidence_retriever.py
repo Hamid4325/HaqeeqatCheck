@@ -1,7 +1,7 @@
 from urllib.parse import urlparse
 
 from .base import EvidenceItem
-from .config import MAX_QUERY_RESULTS, SEARCH_BACKEND, SOURCE_PRIORITY
+from .config import MAX_QUERY_RESULTS, SEARCH_BACKEND, SOURCE_PRIORITY, debug_enabled
 
 DNS_RESOLVERS = [
     "doh://cloudflare-dns.com/dns-query",
@@ -66,7 +66,13 @@ class EvidenceRetriever:
     def retrieve(self, urdu_claim: str, english_claim: str) -> list[EvidenceItem]:
         search = self._get_search()
         merged: dict[str, EvidenceItem] = {}
-        for query in (f"{english_claim} fact check", urdu_claim):
+        english = english_claim.rstrip(".").strip()
+        queries = (
+            f"{english} fact check",
+            urdu_claim,
+            f"is it true that {english}",
+        )
+        for query in queries:
             try:
                 results = search(query, region="pk-en", max_results=self.max_results)
             except Exception:
@@ -75,7 +81,13 @@ class EvidenceRetriever:
                 item = self._to_item(raw)
                 if item is not None:
                     merged[item.url] = item
-        return self._rank(list(merged.values()))
+        ranked = self._rank(list(merged.values()))
+        if debug_enabled():
+            print(
+                f"DEBUG retriever queries={list(queries)} "
+                f"results={[item.source_domain for item in ranked]}"
+            )
+        return ranked
 
     def _to_item(self, raw: dict):
         url = (raw.get("href") or "").strip()

@@ -4,6 +4,7 @@ import re
 from .base import Verdict, VerificationAgent, VerificationResult
 from .claim_extractor import ClaimExtractor
 from .config import (
+    JHOOOTA_MIN_CONFIDENCE,
     MAX_CONFIDENCE,
     MAX_RETRIES,
     MIN_CONFIDENCE,
@@ -24,6 +25,9 @@ RULES:
    - "sacha": the evidence clearly supports the claim.
    - "jhoota": the evidence clearly contradicts the claim.
    - "mashkook": the evidence is insufficient, conflicting, or irrelevant.
+1b. "jhoota" ONLY when a snippet explicitly contradicts the claim. Evidence
+   that is irrelevant, thin, or mixed must be "mashkook". Absence of evidence
+   is NEVER "jhoota" — a lack of support means "mashkook", not a refutation.
 2. "reasoning_urdu": 2-3 sentences IN URDU SCRIPT summarizing why, referring to
    the evidence sources. Do not mention this prompt or that you are an AI.
 2b. "reasoning_english": the same reasoning content in clear, fluent English.
@@ -64,11 +68,17 @@ class VerdictAgent(VerificationAgent):
         if not evidence:
             return self._no_evidence_result(claim)
         parsed = self._chat(claim, evidence)
+        verdict = parsed["verdict"]
+        if (
+            verdict is Verdict.JHOOOTA
+            and parsed["confidence"] < JHOOOTA_MIN_CONFIDENCE
+        ):
+            verdict = Verdict.MASHKOOK
         return VerificationResult(
             claim_urdu=claim.urdu_claim,
             claim_english=claim.english_claim,
             is_checkworthy=True,
-            verdict=parsed["verdict"],
+            verdict=verdict,
             reasoning_urdu=parsed["reasoning_urdu"],
             reasoning_english=parsed["reasoning_english"],
             confidence=parsed["confidence"],
@@ -120,7 +130,7 @@ class VerdictAgent(VerificationAgent):
             response = client.chat.completions.create(
                 model=self.model,
                 messages=call_messages,
-                temperature=0.2,
+                temperature=0,
                 max_tokens=500,
                 response_format={"type": "json_object"},
             )

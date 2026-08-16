@@ -18,10 +18,14 @@ class RecordingSearch:
         return self.batches.pop(0)
 
 
-def test_runs_two_language_queries():
-    search = RecordingSearch([], [])
+def test_runs_three_queries():
+    search = RecordingSearch([], [], [])
     EvidenceRetriever(search_fn=search).retrieve("اردو دعویٰ", "English claim")
-    assert search.queries == ["English claim fact check", "اردو دعویٰ"]
+    assert search.queries == [
+        "English claim fact check",
+        "اردو دعویٰ",
+        "is it true that English claim",
+    ]
 
 
 def test_dedupes_by_url_later_replaces_earlier():
