@@ -120,9 +120,83 @@ def test_parse_failure_keeps_attributed_quote_checkworthy():
     assert result.is_checkworthy is True
 
 
-def test_detects_urdu_ke_mutabiq_attribution():
+def test_urdu_role_word_ke_mutabiq_rejected():
     text = "وزیرِ اعلیٰ پنجاب کے مطابق، بارشوں سے تین افراد ہلاک ہوئے"
-    assert detect_attribution(text) == "وزیرِ اعلیٰ پنجاب"
+    assert detect_attribution(text) is None
+
+
+def test_urdu_spokesman_keha_not_attribution():
+    text = "ترجمان نے کہا کہ پاکستان نے ترکی کے ساتھ دفاعی معاہدے میں توسیع کا اشارہ دیا"
+    assert detect_attribution(text) is None
+
+
+def test_garbled_spokesman_keha_not_attribution():
+    text = "ترجوان نے کہا کہ پاکستان نے ترکی کے ساتھ دفاعی معاہدے میں توسیع کا اشارہ دیا"
+    assert detect_attribution(text) is None
+
+
+def test_english_role_word_not_attribution():
+    assert detect_attribution("The spokesman said the deal was extended.") is None
+    assert detect_attribution("Government said the deal was signed.") is None
+
+
+def test_role_word_signature_rejected():
+    assert detect_attribution("یہ ہمارا فیصلہ ہے۔ — حکومت") is None
+
+
+def test_rejected_role_match_does_not_block_real_name():
+    text = "وزیرِ اعلیٰ پنجاب نے کہا کہ مریم نواز نے کہا کہ بارشیں ہوئیں"
+    assert detect_attribution(text) == "مریم نواز"
+
+
+def test_role_word_news_has_no_attribution_hint():
+    fake = FakeGroqClient([VALID])
+    ClaimExtractor(groq_client=fake).extract(
+        "ترجمان نے کہا کہ پاکستان نے ترکی کے ساتھ دفاعی معاہدے میں توسیع کا اشارہ دیا"
+    )
+    user_content = fake.calls[0]["messages"][-1]["content"]
+    assert "HINT:" not in user_content
+
+
+def test_prompt_rejects_role_only_attribution():
+    assert "PROHIBITED" in CLAIM_EXTRACTION_SYSTEM_PROMPT
+    assert "never frame a claim as an attributed quote" in CLAIM_EXTRACTION_SYSTEM_PROMPT
+
+
+ROLE_QUOTE_RESPONSE = (
+    '{"is_checkworthy": true, "urdu_claim": "کیا ترجمان نے یہ کہا کہ پاکستان '
+    'نے دفاعی معاہدے میں توسیع کی؟", "english_claim": "Did the spokesman say '
+    'that Pakistan expanded the defense agreement?"}'
+)
+
+REAL_QUOTE_RESPONSE = (
+    '{"is_checkworthy": true, "urdu_claim": "کیا مریم نواز نے یہ کہا: میرا بس '
+    'چلے؟", "english_claim": "Did Maryam Nawaz say: \\"Mera bus chaley\\"?"}'
+)
+
+
+def test_reframes_role_attribution_question_to_factual_claim():
+    fake = FakeGroqClient([ROLE_QUOTE_RESPONSE])
+    result = ClaimExtractor(groq_client=fake).extract(
+        "ترجمان نے کہا کہ پاکستان نے دفاعی معاہدے میں توسیع کی"
+    )
+    assert result.is_checkworthy is True
+    assert result.urdu_claim == "پاکستان نے دفاعی معاہدے میں توسیع کی"
+    assert result.english_claim == "Pakistan expanded the defense agreement"
+
+
+def test_keeps_real_name_attribution_question():
+    fake = FakeGroqClient([REAL_QUOTE_RESPONSE])
+    result = ClaimExtractor(groq_client=fake).extract("میرا بس چلے — مریم نواز")
+    assert result.urdu_claim == "کیا مریم نواز نے یہ کہا: میرا بس چلے؟"
+    assert result.english_claim.startswith("Did Maryam Nawaz say")
+
+
+def test_keeps_plain_news_claim_unreframed():
+    fake = FakeGroqClient([VALID])
+    result = ClaimExtractor(groq_client=fake).extract("سندھ میں بارش")
+    assert result.urdu_claim == "سندھ میں بارش سے تین افراد ہلاک ہو گئے"
+    assert result.english_claim == "Three people died in rains in Sindh, Pakistan."
 
 
 def test_detects_urdu_qa_qol_attribution():

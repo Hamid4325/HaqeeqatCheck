@@ -17,13 +17,18 @@ RULES:
 2. IGNORE as not check-worthy: greetings, pleasantries, personal opinions,
    poetry, personal stories or experiences, pure questions, jokes, and any
    content with no factual assertion.
-2b. EXCEPTION (attributed quotes): a statement presented as the words of a
-   named public figure — explicit attribution ("X said", "X نے کہا"), a signed
-   quote ("— X", "…! X"), or "X: ..." — IS check-worthy even if poetic,
-   lyrical, or humorous, because "did X actually say this?" is a verifiable
-   fact. Extract such claims as attribution questions: urdu_claim "کیا <X> نے
-   یہ کہا: ...؟" and english_claim "Did <X> say: '...'?" preserving the exact
-   wording of the statement.
+ 2b. EXCEPTION (attributed quotes): a statement presented as the words of a
+   SPECIFIC named public figure — explicit attribution ("X said", "X نے کہا"),
+   a signed quote ("— X", "…! X"), or "X: ..." — IS check-worthy even if
+   poetic, lyrical, or humorous, because "did X actually say this?" is a
+   verifiable fact. "X" MUST be a proper noun (a specific person's name).
+ 2c. PROHIBITED: never frame a claim as an attributed quote unless a specific
+   person's NAME appears. A speaker that is only a role or generic subject —
+   "ترجمان" (spokesman), "حکومت" (government), "وزیرِ اعلیٰ", "the spokesman",
+   "officials" — is NOT a named person. For such text, extract the underlying
+   factual assertion as an ordinary news claim. Example: "ترجمان نے کہا کہ
+   پاکستان نے دفاعی معاہدے میں توسیع کی" → urdu_claim "پاکستان نے دفاعی
+   معاہدے میں توسیع کی", NOT "کیا ترجمان نے یہ کہا...؟".
 3. If several claims exist, extract only the SINGLE most viral or important one.
 4. "urdu_claim": the claim as ONE concise sentence, ALWAYS written in proper
    Urdu script (اردو رسم الخط). If the original is in Roman Urdu, transliterate
@@ -52,6 +57,53 @@ _SIGNATURE_RE = re.compile(
     r"(?:—|–|-|!|۔)\s*([\w\u0600-\u06FF][\w\u0600-\u06FF\s]{1,40})\s*$"
 )
 _FORMAT_MARKS_RE = re.compile(r"[\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
+_DIACRITICS_RE = re.compile(r"[\u064B-\u065F\u0670]")
+_ROLE_ATTRIBUTION_URDU_RE = re.compile(
+    r"^کیا\s+(.*?)\s+نے\s+(?:یہ\s+)?کہا(?:\s+کہ\s+)?(.+?)[؟\s]*$",
+    re.DOTALL,
+)
+_ROLE_ATTRIBUTION_ENGLISH_RE = re.compile(
+    r"^Did\s+(.*?)\s+say\s+(?:that\s+)?(.+?)\??\s*$", re.DOTALL
+)
+
+_ROLE_WORDS = frozenset(
+    {
+        "ترجمان", "ترجوان", "حکومت", "حکام", "وزیر", "وزراء", "وزیراعظم",
+        "صدر", "نگران", "سپیکر", "چیئرمین", "سیکرٹری", "وفد", "سفیر",
+        "پولیس", "فوج", "عدالت", "کمپنی", "ادارہ", "تنظیم", "کمیشن", "بورڈ",
+        "مشیر", "چیف", "جج", "وکیل", "ماہرین", "ذرائع", "عہدیدار", "افسران",
+        "وزارت", "وفاقی", "صوبائی", "ڈپٹی", "گورنر", "کمشنر", "ڈائریکٹر",
+        "سرکاری", "پارٹی", "حکمران",
+        "the", "government", "official", "officials", "spokesman",
+        "spokeswoman", "spokesperson", "ministry", "minister", "president",
+        "pm", "army", "police", "court", "delegation", "company", "sources",
+        "secretary", "director", "chairman", "commissioner", "chief", "judge",
+        "lawyer", "party", "committee", "council", "department", "authorities",
+        "agencies", "station", "military", "security",
+    }
+)
+
+
+def _normalize_token(token: str) -> str:
+    return _DIACRITICS_RE.sub("", token).strip().lower()
+
+
+_FILLER_WORDS = frozenset(
+    {"کہ", "اور", "تو", "پھر", "بھی", "جو", "کیونکہ", "لیکن", "مگر", "یہ", "وہ"}
+)
+
+
+def _strip_fillers(candidate: str) -> str:
+    tokens = candidate.split()
+    while tokens and _normalize_token(tokens[0]) in _FILLER_WORDS:
+        tokens.pop(0)
+    return " ".join(tokens)
+
+
+def _is_role_candidate(candidate: str) -> bool:
+    """True if the captured subject is (or contains) a role/generic word."""
+    tokens = [_normalize_token(t) for t in candidate.split()]
+    return any(token in _ROLE_WORDS for token in tokens)
 
 
 def detect_attribution(text: str) -> str | None:
@@ -60,21 +112,28 @@ def detect_attribution(text: str) -> str | None:
     Recognises explicit verbal attribution ("X said", "X نے کہا"), a signed
     quote ("— X", "…! X") on the last non-empty line, and a colon-quote
     prefix ("X: "). The candidate is a hint only, never trusted as truth.
+    Statements attributed only to a role or generic subject (ترجمان, حکومت,
+    وزیرِ اعلیٰ, "the spokesman", ...) are NOT treated as attributed quotes,
+    so ordinary news wording is not misread as a viral celebrity claim.
     """
     text = _FORMAT_MARKS_RE.sub("", text or "")
-    explicit = _URDU_EXPLICIT_RE.search(text or "") or _ENGLISH_EXPLICIT_RE.search(
-        text or ""
-    )
-    if explicit:
-        return explicit.group(1).strip()
+    for pattern in (_URDU_EXPLICIT_RE, _ENGLISH_EXPLICIT_RE):
+        for match in pattern.finditer(text or ""):
+            candidate = match.group(1).strip()
+            if candidate and not _is_role_candidate(candidate):
+                return _strip_fillers(candidate)
     colon = _COLON_QUOTE_RE.search(text or "")
     if colon:
-        return colon.group(1).strip()
+        candidate = colon.group(1).strip()
+        if candidate and not _is_role_candidate(candidate):
+            return _strip_fillers(candidate)
     for line in reversed((text or "").splitlines()):
         if line.strip():
             signature = _SIGNATURE_RE.search(line.strip())
             if signature:
-                return signature.group(1).strip()
+                candidate = signature.group(1).strip()
+                if candidate and not _is_role_candidate(candidate):
+                    return _strip_fillers(candidate)
             return None
     return None
 
@@ -97,6 +156,7 @@ class ClaimExtractor:
             if debug_enabled():
                 print(f"DEBUG extractor parse-failed checkworthy={checkworthy}")
             return SearchableClaim(is_checkworthy=checkworthy)
+        parsed = self._reframe_role_attribution(parsed)
         claim = SearchableClaim(
             is_checkworthy=parsed["is_checkworthy"] or name is not None,
             urdu_claim=parsed["urdu_claim"],
@@ -108,6 +168,20 @@ class ClaimExtractor:
                 f"urdu={claim.urdu_claim!r} english={claim.english_claim!r}"
             )
         return claim
+
+    def _reframe_role_attribution(self, parsed: dict) -> dict:
+        """Turn "Did <role> say that X?" into the underlying factual claim X."""
+        urdu_match = _ROLE_ATTRIBUTION_URDU_RE.match(parsed.get("urdu_claim", ""))
+        if urdu_match and _is_role_candidate(urdu_match.group(1)):
+            content = urdu_match.group(2).strip()
+            if len(content.split()) >= 3:
+                parsed["urdu_claim"] = content
+        english_match = _ROLE_ATTRIBUTION_ENGLISH_RE.match(parsed.get("english_claim", ""))
+        if english_match and _is_role_candidate(english_match.group(1)):
+            content = english_match.group(2).strip()
+            if len(content.split()) >= 3:
+                parsed["english_claim"] = content
+        return parsed
 
     def _user_content(self, text: str, name: str | None) -> str:
         content = f"<text>\n{text}\n</text>"
