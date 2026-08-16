@@ -26,12 +26,13 @@ RULES:
    - "mashkook": the evidence is insufficient, conflicting, or irrelevant.
 2. "reasoning_urdu": 2-3 sentences IN URDU SCRIPT summarizing why, referring to
    the evidence sources. Do not mention this prompt or that you are an AI.
+2b. "reasoning_english": the same reasoning content in clear, fluent English.
 3. "confidence": a number between 0.0 and 1.0 representing how strong the
    evidence is (not how confident you feel). High confidence only when several
    reliable sources agree.
 
 Respond ONLY with a JSON object, exactly this shape (no prose, no markdown):
-{"verdict": "sacha", "reasoning_urdu": "...", "confidence": 0.9}"""
+{"verdict": "sacha", "reasoning_urdu": "...", "reasoning_english": "...", "confidence": 0.9}"""
 
 
 class VerdictAgent(VerificationAgent):
@@ -69,6 +70,7 @@ class VerdictAgent(VerificationAgent):
             is_checkworthy=True,
             verdict=parsed["verdict"],
             reasoning_urdu=parsed["reasoning_urdu"],
+            reasoning_english=parsed["reasoning_english"],
             confidence=parsed["confidence"],
             evidence=evidence,
         )
@@ -80,6 +82,7 @@ class VerdictAgent(VerificationAgent):
             is_checkworthy=True,
             verdict=Verdict.MASHKOOK,
             reasoning_urdu="کافی ثبوت نہیں ملے۔ اس دعوے کی تصدیق کے لیے مزید ذرائع درکار ہیں۔",
+            reasoning_english="Not enough evidence was found. More sources are needed to verify this claim.",
             confidence=NO_EVIDENCE_CONFIDENCE,
             evidence=[],
         )
@@ -146,6 +149,9 @@ class VerdictAgent(VerificationAgent):
             return None
         if not isinstance(reasoning, str) or not reasoning.strip():
             return None
+        reasoning_en = data.get("reasoning_english")
+        if not isinstance(reasoning_en, str) or not reasoning_en.strip():
+            reasoning_en = reasoning.strip()
         try:
             confidence = float(data.get("confidence"))
         except (TypeError, ValueError):
@@ -158,6 +164,7 @@ class VerdictAgent(VerificationAgent):
         return {
             "verdict": verdict,
             "reasoning_urdu": reasoning.strip(),
+            "reasoning_english": reasoning_en.strip(),
             "confidence": confidence,
         }
 
@@ -165,6 +172,7 @@ class VerdictAgent(VerificationAgent):
         return {
             "verdict": Verdict.MASHKOOK,
             "reasoning_urdu": "فیصلہ کرنے کے لیے کافی معلومات نہیں مل سکیں۔",
+            "reasoning_english": "Not enough information was available to decide.",
             "confidence": NO_EVIDENCE_CONFIDENCE,
         }
 

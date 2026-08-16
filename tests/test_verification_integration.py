@@ -15,6 +15,7 @@ def test_end_to_end_verdict_for_urdu_claim():
     assert result.verdict is not None
     assert 0.0 <= result.confidence <= 1.0
     assert result.reasoning_urdu.strip()
+    assert result.reasoning_english.strip()
     assert result.evidence
 
 

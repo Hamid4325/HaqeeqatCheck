@@ -38,6 +38,7 @@ class VerificationResult:
     is_checkworthy: bool = False
     verdict: Verdict | None = None
     reasoning_urdu: str = ""
+    reasoning_english: str = ""
     confidence: float = 0.0
     evidence: list[EvidenceItem] = field(default_factory=list)
 

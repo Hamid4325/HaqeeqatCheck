@@ -10,6 +10,7 @@ CLAIM = (
 )
 VERDICT = (
     '{"verdict": "sacha", "reasoning_urdu": "ثبوت اس دعوے کی حمایت کرتے ہیں۔",'
+    ' "reasoning_english": "The evidence supports this claim.",'
     ' "confidence": 0.9}'
 )
 RESULT = {"title": "Soch", "href": "https://sochfactcheck.com/a", "body": "x"}
@@ -60,6 +61,8 @@ def test_parses_valid_verdict():
     assert result.verdict is Verdict.SACHA
     assert result.verdict_label_urdu == "سچا"
     assert result.confidence == 0.9
+    assert result.reasoning_urdu == "ثبوت اس دعوے کی حمایت کرتے ہیں۔"
+    assert result.reasoning_english == "The evidence supports this claim."
     assert result.evidence[0].source_domain == "sochfactcheck.com"
 
 
