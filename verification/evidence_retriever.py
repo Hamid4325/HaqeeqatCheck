@@ -63,15 +63,22 @@ class EvidenceRetriever:
         self._search_fn = search_fn
         self.max_results = max_results
 
-    def retrieve(self, urdu_claim: str, english_claim: str) -> list[EvidenceItem]:
+    def retrieve(
+        self, urdu_claim: str, english_claim: str, notes: str = ""
+    ) -> list[EvidenceItem]:
         search = self._get_search()
         merged: dict[str, EvidenceItem] = {}
         english = english_claim.rstrip(".").strip()
-        queries = (
-            f"{english} fact check",
-            urdu_claim,
-            f"is it true that {english}",
-        )
+        queries = []
+        if english and len(english) >= 10:
+            queries.append(f"{english} fact check")
+            queries.append(f"is it true that {english}")
+        if urdu_claim and len(urdu_claim) >= 5:
+            queries.append(urdu_claim)
+        if notes:
+            queries.append(notes)
+        if not queries:
+            return []
         for query in queries:
             try:
                 results = search(query, region="pk-en", max_results=self.max_results)

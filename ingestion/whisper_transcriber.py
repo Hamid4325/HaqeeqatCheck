@@ -1,6 +1,24 @@
 """Whisper-based speech-to-text engine."""
 
+import os
+
 from ingestion.base import Transcriber
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_HF_MODELS_DIR = "/home/user/app/models"
+_LOCAL_MODELS_DIR = os.path.join(_REPO_ROOT, "models")
+
+
+def _whisper_download_root() -> str:
+    """Return the best directory for caching Whisper model weights."""
+    for candidate in (_HF_MODELS_DIR, _LOCAL_MODELS_DIR):
+        whisper_dir = os.path.join(candidate, "whisper")
+        if os.path.isdir(whisper_dir) and os.listdir(whisper_dir):
+            return whisper_dir
+    # Prefer HF path on Hugging Face Spaces, else local
+    if os.path.isdir(_HF_MODELS_DIR) or os.environ.get("SPACE_ID"):
+        return os.path.join(_HF_MODELS_DIR, "whisper")
+    return os.path.join(_LOCAL_MODELS_DIR, "whisper")
 
 
 class WhisperTranscriber(Transcriber):
@@ -26,7 +44,9 @@ class WhisperTranscriber(Transcriber):
         if self._model is None:
             import whisper
 
-            self._model = whisper.load_model(self.model_size)
+            self._model = whisper.load_model(
+                self.model_size, download_root=_whisper_download_root()
+            )
         return self._model
 
     def transcribe(self, audio_path: str) -> str:

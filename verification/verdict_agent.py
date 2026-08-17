@@ -64,7 +64,9 @@ class VerdictAgent(VerificationAgent):
                 claim_english=claim.english_claim,
                 is_checkworthy=False,
             )
-        evidence = self.evidence_retriever.retrieve(claim.urdu_claim, claim.english_claim)
+        evidence = self.evidence_retriever.retrieve(
+            claim.urdu_claim, claim.english_claim, claim.notes
+        )
         if not evidence:
             return self._no_evidence_result(claim)
         parsed = self._chat(claim, evidence)
@@ -131,8 +133,7 @@ class VerdictAgent(VerificationAgent):
                 model=self.model,
                 messages=call_messages,
                 temperature=0,
-                max_tokens=500,
-                response_format={"type": "json_object"},
+                max_completion_tokens=500,
             )
             last_content = response.choices[0].message.content or ""
             parsed = self._parse(last_content)

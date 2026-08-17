@@ -3,12 +3,16 @@ import re
 
 from .base import SearchableClaim
 from .config import MAX_RETRIES, MODEL_ID, debug_enabled, get_api_key
+from .utils import extract_numbers, has_scam_signals, number_note_for_claim
 
 CLAIM_EXTRACTION_SYSTEM_PROMPT = """\
 You are the claim-extraction step of an Urdu fact-checking pipeline.
 You receive raw, noisy text: OCR from an image, a speech-to-text transcript, or
 both. The text may be written in Urdu script (اردو رسم الخط) OR in Roman Urdu
 (Urdu written with English/Latin letters, e.g. "sarkar ne naya qanoon pass kiya").
+You are analyzing noisy transcripts that might be in Punjabi or Roman Urdu. Pay
+extremely close attention to numbers (like 8171, 786, etc.) and specific keywords
+like "Eidi", "BISP", or "ID Card".
 Decide whether the text contains ONE verifiable factual claim, and if so extract it.
 
 RULES:
@@ -18,17 +22,25 @@ RULES:
    poetry, personal stories or experiences, pure questions, jokes, and any
    content with no factual assertion.
  2b. EXCEPTION (attributed quotes): a statement presented as the words of a
-   SPECIFIC named public figure — explicit attribution ("X said", "X نے کہا"),
-   a signed quote ("— X", "…! X"), or "X: ..." — IS check-worthy even if
-   poetic, lyrical, or humorous, because "did X actually say this?" is a
-   verifiable fact. "X" MUST be a proper noun (a specific person's name).
+    SPECIFIC named public figure — explicit attribution ("X said", "X نے کہا"),
+    a signed quote ("— X", "…! X"), or "X: ..." — IS check-worthy even if
+    poetic, lyrical, or humorous, because "did X actually say this?" is a
+    verifiable fact. "X" MUST be a proper noun (a specific person's name).
  2c. PROHIBITED: never frame a claim as an attributed quote unless a specific
-   person's NAME appears. A speaker that is only a role or generic subject —
-   "ترجمان" (spokesman), "حکومت" (government), "وزیرِ اعلیٰ", "the spokesman",
-   "officials" — is NOT a named person. For such text, extract the underlying
-   factual assertion as an ordinary news claim. Example: "ترجمان نے کہا کہ
-   پاکستان نے دفاعی معاہدے میں توسیع کی" → urdu_claim "پاکستان نے دفاعی
-   معاہدے میں توسیع کی", NOT "کیا ترجمان نے یہ کہا...؟".
+    person's NAME appears. A speaker that is only a role or generic subject —
+    "ترجمان" (spokesman), "حکومت" (government), "وزیرِ اعلیٰ", "the spokesman",
+    "officials" — is NOT a named person. For such text, extract the underlying
+    factual assertion as an ordinary news claim. Example: "ترجمان نے کہا کہ
+    پاکستان نے دفاعی معاہدے میں توسیع کی" → urdu_claim "پاکستان نے دفاعی
+    معاہدے میں توسیع کی", NOT "کیا ترجمان نے یہ کہا...؟".
+2d. NOISY-TRANSCRIPT RULE: if the transcript is messy, look for the MOST
+    SPECIFIC factual claim involving numbers or entities. Do not default to
+    general political news like "Steel Mills" unless the text EXPLICITLY
+    mentions them by name. Numbers and short codes (e.g. 8171, 786, Ehsaas,
+    BISP) are strong signals — prefer them over vague political statements.
+2e. PHONETIC NUMBER RULE: if you see phonetic numbers written out in Urdu
+    script (e.g. "ایٹ ون سیون ون" = 8171, "سات اٹھ سو چھ" = 786), convert
+    them to digits in your internal reasoning before extracting the claim.
 3. If several claims exist, extract only the SINGLE most viral or important one.
 4. "urdu_claim": the claim as ONE concise sentence, ALWAYS written in proper
    Urdu script (اردو رسم الخط). If the original is in Roman Urdu, transliterate
@@ -146,22 +158,45 @@ class ClaimExtractor:
 
     def extract(self, text: str) -> SearchableClaim:
         name = detect_attribution(text)
+        scam_signals = has_scam_signals(text)
+        # Guard: if OCR returned almost nothing, don't bother with LLM
+        stripped = (text or "").strip()
+        if len(stripped) < 10 and not scam_signals:
+            if debug_enabled():
+                print(f"DEBUG extractor text too short ({len(stripped)} chars), skipping")
+            return SearchableClaim(is_checkworthy=False)
         messages = [
             {"role": "system", "content": CLAIM_EXTRACTION_SYSTEM_PROMPT},
             {"role": "user", "content": self._user_content(text, name)},
         ]
         parsed = self._chat(messages)
         if parsed is None:
-            checkworthy = name is not None
+            checkworthy = name is not None or scam_signals
             if debug_enabled():
                 print(f"DEBUG extractor parse-failed checkworthy={checkworthy}")
+            if scam_signals:
+                numbers = extract_numbers(text)
+                note = number_note_for_claim(numbers)
+                claim_text = self._fallback_claim_from_text(text)
+                return SearchableClaim(
+                    is_checkworthy=True,
+                    urdu_claim=claim_text["urdu"],
+                    english_claim=claim_text["english"],
+                    notes=note or "",
+                )
             return SearchableClaim(is_checkworthy=checkworthy)
         parsed = self._reframe_role_attribution(parsed)
+        model_says_checkworthy = parsed["is_checkworthy"]
         claim = SearchableClaim(
-            is_checkworthy=parsed["is_checkworthy"] or name is not None,
+            is_checkworthy=model_says_checkworthy or name is not None or scam_signals,
             urdu_claim=parsed["urdu_claim"],
             english_claim=parsed["english_claim"],
         )
+        combined = f"{text} {parsed.get('urdu_claim', '')} {parsed.get('english_claim', '')}"
+        numbers = extract_numbers(combined)
+        note = number_note_for_claim(numbers)
+        if note:
+            claim.notes = note
         if debug_enabled():
             print(
                 f"DEBUG extractor checkworthy={claim.is_checkworthy} "
@@ -195,6 +230,37 @@ class ClaimExtractor:
             )
         return content
 
+    def _fallback_claim_from_text(self, text: str) -> dict:
+        """Build a minimal claim dict from raw text when the model fails."""
+        numbers = extract_numbers(text)
+        # Extract the longest meaningful line/sentence from OCR
+        lines = [ln.strip() for ln in re.split(r"[。\n\r!؟.]+", text) if ln.strip()]
+        lines.sort(key=len, reverse=True)
+        best_line = lines[0] if lines else text.strip()[:200]
+        urdu = best_line[:200]
+
+        english_parts = []
+        if "8171" in numbers or "8171" in text:
+            english_parts.append("BISP 8171")
+        if "5000" in numbers or "5000" in text:
+            english_parts.append("5000 rupees")
+        if re.search(r"ایدی|ایڈی|eidi|اییڈی", text, re.IGNORECASE):
+            english_parts.append("Eidi")
+        if re.search(r"بی ایس پی|BISP|ایحسان|ehsaas|ehsan", text, re.IGNORECASE):
+            english_parts.append("BISP Ehsaas")
+        if not english_parts:
+            english_parts.append("Pakistan")
+            # Add key Urdu words that survived OCR as search terms
+            key_words = re.findall(
+                r"(?:حکومت|سرکار|وزیر|عدلیہ|پولیس|فوج|عدالت|پارٹی|-election|.poll|vote)",
+                text,
+                re.IGNORECASE,
+            )
+            if key_words:
+                english_parts.extend(key_words[:3])
+        english = " ".join(english_parts)
+        return {"urdu": urdu, "english": english}
+
     def _chat(self, messages):
         client = self._get_client()
         last_content = ""
@@ -214,8 +280,7 @@ class ClaimExtractor:
                 model=self.model,
                 messages=call_messages,
                 temperature=0,
-                max_tokens=300,
-                response_format={"type": "json_object"},
+                max_completion_tokens=300,
             )
             last_content = response.choices[0].message.content or ""
             parsed = self._parse(last_content)
@@ -245,11 +310,30 @@ class ClaimExtractor:
             return None
         if not isinstance(english_claim, str) or not english_claim.strip():
             return None
+        urdu_claim = urdu_claim.strip()
+        english_claim = english_claim.strip()
+        if not self._is_meaningful_claim(urdu_claim, english_claim):
+            return None
         return {
             "is_checkworthy": is_checkworthy,
-            "urdu_claim": urdu_claim.strip(),
-            "english_claim": english_claim.strip(),
+            "urdu_claim": urdu_claim,
+            "english_claim": english_claim,
         }
+
+    @staticmethod
+    def _is_meaningful_claim(urdu: str, english: str) -> bool:
+        """Reject claims that are garbage: too short, punctuation-only, etc."""
+        _GARBAGE_RE = re.compile(r"^[\s\.\,\?\!\-\—\–\…\:\/\\\|\*\+\=\`\~\@\#\$\%\^\&\(\)\[\]\{\}\<\>]+$")
+        if len(english) < 10:
+            return False
+        if _GARBAGE_RE.match(english):
+            return False
+        if _GARBAGE_RE.match(urdu):
+            return False
+        # Reject if claim is just the word "claim" or "fact" repeated
+        if english.lower().strip() in ("claim", "fact", "news", "true", "false", "...", "..", "."):
+            return False
+        return True
 
     def _get_client(self):
         if self._client is None:

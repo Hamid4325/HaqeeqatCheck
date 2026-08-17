@@ -29,6 +29,7 @@ class SearchableClaim:
     is_checkworthy: bool = False
     urdu_claim: str = ""
     english_claim: str = ""
+    notes: str = ""
 
 
 @dataclass
