@@ -3,7 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-MODEL_ID = "qwen/qwen3.6-27b"
+MODEL_ID = "openai/gpt-oss-20b"
 MAX_RETRIES = 3
 MAX_QUERY_RESULTS = 5
 SEARCH_BACKEND = "auto"

@@ -12,6 +12,7 @@ from .config import (
     NO_EVIDENCE_CONFIDENCE,
     get_api_key,
 )
+from .debug_trace import trace
 from .evidence_retriever import EvidenceRetriever
 
 VERDICT_SYSTEM_PROMPT = """\
@@ -57,25 +58,34 @@ class VerdictAgent(VerificationAgent):
         self.max_retries = max_retries
 
     def run(self, text: str) -> VerificationResult:
+        trace(f"[Agent] Starting verification pipeline. Text length: {len(text)}")
         claim = self.claim_extractor.extract(text)
+        trace(f"[Agent] Claim extracted: checkworthy={claim.is_checkworthy} urdu={claim.urdu_claim!r} english={claim.english_claim!r}")
         if not claim.is_checkworthy:
+            trace("[Agent] NOT checkworthy -> returning early")
             return VerificationResult(
                 claim_urdu=claim.urdu_claim,
                 claim_english=claim.english_claim,
                 is_checkworthy=False,
             )
-        evidence = self.evidence_retriever.retrieve(
-            claim.urdu_claim, claim.english_claim, claim.notes
-        )
+        trace(f"[Agent] Retrieving evidence for: {claim.english_claim!r}")
+        evidence = self.evidence_retriever.retrieve(claim.urdu_claim, claim.english_claim)
+        trace(f"[Agent] Evidence found: {len(evidence)} items")
+        for i, e in enumerate(evidence):
+            trace(f"  [{i}] {e.source_domain} | {e.title[:60]}")
         if not evidence:
+            trace("[Agent] No evidence -> returning mashkook fallback")
             return self._no_evidence_result(claim)
+        trace(f"[Agent] Calling verdict LLM (model={self.model})...")
         parsed = self._chat(claim, evidence)
+        trace(f"[Agent] Verdict LLM returned: {parsed['verdict'].value} confidence={parsed['confidence']}")
         verdict = parsed["verdict"]
         if (
             verdict is Verdict.JHOOOTA
             and parsed["confidence"] < JHOOOTA_MIN_CONFIDENCE
         ):
             verdict = Verdict.MASHKOOK
+            trace(f"[Agent] Downgraded jhoota to mashkook (confidence {parsed['confidence']} < {JHOOOTA_MIN_CONFIDENCE})")
         return VerificationResult(
             claim_urdu=claim.urdu_claim,
             claim_english=claim.english_claim,
@@ -143,7 +153,8 @@ class VerdictAgent(VerificationAgent):
 
     def _parse(self, content: str):
         try:
-            data = json.loads(content)
+            cleaned = re.sub(r"<think>.*?</think>", "", content or "", flags=re.DOTALL).strip()
+            data = json.loads(cleaned)
         except (json.JSONDecodeError, TypeError):
             match = re.search(r"\{.*\}", content or "", re.DOTALL)
             if match is None:

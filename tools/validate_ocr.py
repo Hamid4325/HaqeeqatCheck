@@ -19,6 +19,8 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 EXPECTED_FIRST = "شکریہ پاکستان"
 
 MD_PATH = os.path.join(ROOT, ".superpowers", "sdd", "ocr-validation.md")
@@ -136,6 +138,32 @@ def main(argv):
             text = "ERROR: %s: %s" % (type(exc).__name__, exc)
             exit_code = 1
         record("detected: %r" % text)
+
+        record("engine: UTRNet (YOLOv8 + UTRNet)")
+        try:
+            from ingestion.urdu_ocr import UTRNetOCREngine
+
+            engine = UTRNetOCREngine()
+            utrnet_text = engine.extract_text(image_path)
+        except Exception as exc:
+            import traceback
+
+            traceback.print_exc()
+            utrnet_text = "ERROR: %s: %s" % (type(exc).__name__, exc)
+            exit_code = 1
+        record("detected: %r" % utrnet_text)
+
+        if index == 0:
+            matched = any(word in utrnet_text for word in ("شکریہ", "پاکستان"))
+            if "ERROR" in utrnet_text:
+                record("verdict: FAIL - UTRNet errored (see above); no default engine swap")
+            elif matched:
+                record("verdict: PASS - UTRNet recognized the expected Urdu text; proceed to default swap")
+            else:
+                record(
+                    "verdict: FAIL - UTRNet returned %r, no match for %r; re-research"
+                    % (utrnet_text, EXPECTED_FIRST)
+                )
 
     with open(MD_PATH, "a", encoding="utf-8") as handle:
         handle.write("\n".join(md_lines) + "\n")

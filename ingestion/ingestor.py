@@ -56,8 +56,14 @@ class HaqeeqatIngestor:
 
     def _ingest_image(self, path: str) -> dict:
         ocr_text = self.ocr_engine.extract_text(path)
+        garbled = utils.is_ocr_garbled(ocr_text)
         metadata = self._base_metadata()
         metadata["frames_sampled"] = 1
+        metadata["ocr_garbled"] = garbled
+        if garbled:
+            metadata["warnings"] = metadata.get("warnings", []) + [
+                "OCR produced garbled output; results may be unreliable"
+            ]
         return {
             "file_type": "image",
             "audio_transcript": "",

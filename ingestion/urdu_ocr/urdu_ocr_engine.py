@@ -4,22 +4,11 @@ import os
 
 from ingestion.base import OCREngine
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-HF_MODELS_DIR = "/home/user/app/models"
-LOCAL_MODELS_DIR = os.path.join(REPO_ROOT, "models")
+MODELS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "models"
+)
 RECOGNIZER_WEIGHTS = "best_norm_ED.pth"
 DETECTOR_WEIGHTS = "yolov8m_UrduDoc.pt"
-
-
-def _resolve_models_dir() -> str:
-    """Return the first directory that contains both model weight files."""
-    for candidate in (HF_MODELS_DIR, LOCAL_MODELS_DIR):
-        rec = os.path.join(candidate, RECOGNIZER_WEIGHTS)
-        det = os.path.join(candidate, DETECTOR_WEIGHTS)
-        if os.path.isfile(rec) and os.path.isfile(det):
-            return candidate
-    # Fallback: prefer HF path if it exists, else local
-    return HF_MODELS_DIR if os.path.isdir(HF_MODELS_DIR) else LOCAL_MODELS_DIR
 
 
 class UTRNetOCREngine(OCREngine):
@@ -32,7 +21,7 @@ class UTRNetOCREngine(OCREngine):
 
     def __init__(self, lang="ur", model_dir=None, device="auto", detector=None, recognizer=None):
         self.lang = lang
-        self.model_dir = model_dir or _resolve_models_dir()
+        self.model_dir = model_dir or MODELS_DIR
         self.device = device
         self._detector = detector
         self._recognizer = recognizer

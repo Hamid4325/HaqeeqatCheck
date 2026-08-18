@@ -98,8 +98,10 @@ def _resolve_path(file_data) -> str | None:
     return None
 
 
-def _process_media(file_data) -> tuple[str, str]:
+def _process_media_inner(file_data) -> tuple[str, str]:
     """Ingest a media file, verify claims, return (verdict_box, reasoning_box)."""
+    from verification.debug_trace import get_trace
+
     if file_data is None:
         return "کوئی فائل منتخب نہیں / No file selected.", ""
 
@@ -116,32 +118,59 @@ def _process_media(file_data) -> tuple[str, str]:
     if not text or not text.strip():
         return "کوئی متن نکالا نہیں جا سکا / No text was extracted from the file.", ""
 
+    if report.get("metadata", {}).get("ocr_garbled"):
+        return (
+            "تصحیح OCR ناکام رہی / OCR failed to read this image properly.\n"
+            "براہ کرم واضح تصویر اپ لوڈ کریں / Please upload a clearer image."
+        ), f"استخراج شدہ متن:\n{text[:300]}"
+
     result = agent.run(text)
+    trace_lines = get_trace()
 
     if not result.is_checkworthy:
+        debug_info = "\n".join(trace_lines) if trace_lines else ""
         return "کوئی قابلِ تصدیق دعویٰ نہیں / No checkworthy claim found.", (
-            f"استخراج شدہ متن:\n{text[:500]}"
+            f"استخراج شدہ متن:\n{text[:500]}\n\n--- DEBUG TRACE ---\n{debug_info}"
         )
 
     verdict_box = _format_verdict(result)
     reasoning_box = _format_reasoning(result)
+    if trace_lines:
+        reasoning_box += "\n\n--- DEBUG TRACE ---\n" + "\n".join(trace_lines)
     return verdict_box, reasoning_box
 
 
 def _process_text(text: str) -> tuple[str, str]:
     """Verify a pasted text claim, return (verdict_box, reasoning_box)."""
+    from verification.debug_trace import get_trace
+
     if not text or not text.strip():
         return "براہ کرم متن لکھیں / Please enter some text.", ""
 
     agent = _get_agent()
     result = agent.run(text)
+    trace_lines = get_trace()
 
     if not result.is_checkworthy:
-        return "کوئی قابلِ تصدیق دعویٰ نہیں / No checkworthy claim found.", ""
+        debug_info = "\n".join(trace_lines) if trace_lines else ""
+        return "کوئی قابلِ تصدیق دعویٰ نہیں / No checkworthy claim found.", (
+            f"--- DEBUG TRACE ---\n{debug_info}"
+        )
 
     verdict_box = _format_verdict(result)
     reasoning_box = _format_reasoning(result)
+    if trace_lines:
+        reasoning_box += "\n\n--- DEBUG TRACE ---\n" + "\n".join(trace_lines)
     return verdict_box, reasoning_box
+
+
+# Wrap _process_media_inner with @spaces.GPU on HF so UTRNet gets a GPU.
+if _HAS_SPACES:
+    @spaces.GPU
+    def _process_media(file_data) -> tuple[str, str]:
+        return _process_media_inner(file_data)
+else:
+    _process_media = _process_media_inner
 
 
 def _format_verdict(result) -> str:

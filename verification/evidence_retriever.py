@@ -2,6 +2,7 @@ from urllib.parse import urlparse
 
 from .base import EvidenceItem
 from .config import MAX_QUERY_RESULTS, SEARCH_BACKEND, SOURCE_PRIORITY, debug_enabled
+from .debug_trace import trace
 
 DNS_RESOLVERS = [
     "doh://cloudflare-dns.com/dns-query",
@@ -63,32 +64,29 @@ class EvidenceRetriever:
         self._search_fn = search_fn
         self.max_results = max_results
 
-    def retrieve(
-        self, urdu_claim: str, english_claim: str, notes: str = ""
-    ) -> list[EvidenceItem]:
+    def retrieve(self, urdu_claim: str, english_claim: str) -> list[EvidenceItem]:
         search = self._get_search()
         merged: dict[str, EvidenceItem] = {}
         english = english_claim.rstrip(".").strip()
-        queries = []
-        if english and len(english) >= 10:
-            queries.append(f"{english} fact check")
-            queries.append(f"is it true that {english}")
-        if urdu_claim and len(urdu_claim) >= 5:
-            queries.append(urdu_claim)
-        if notes:
-            queries.append(notes)
-        if not queries:
-            return []
+        queries = (
+            f"{english} fact check",
+            urdu_claim,
+            f"is it true that {english}",
+        )
+        trace(f"[Evidence] Search queries: {queries}")
         for query in queries:
             try:
                 results = search(query, region="pk-en", max_results=self.max_results)
-            except Exception:
+                trace(f"[Evidence] Query {query[:50]!r} -> {len(results or [])} results")
+            except Exception as exc:
+                trace(f"[Evidence] Query {query[:50]!r} -> ERROR: {exc}")
                 continue
             for raw in results or []:
                 item = self._to_item(raw)
                 if item is not None:
                     merged[item.url] = item
         ranked = self._rank(list(merged.values()))
+        trace(f"[Evidence] Total merged: {len(merged)}, ranked: {len(ranked)}")
         if debug_enabled():
             print(
                 f"DEBUG retriever queries={list(queries)} "

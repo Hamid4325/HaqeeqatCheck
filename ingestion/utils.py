@@ -79,6 +79,44 @@ def bidi_safe_combine(audio_part: str, ocr_part: str) -> str:
     return "\n".join(sections)
 
 
+def _is_urdu_char(ch: str) -> bool:
+    code = ord(ch)
+    return (
+        0x0600 <= code <= 0x06FF
+        or 0x0750 <= code <= 0x077F
+        or 0xFB50 <= code <= 0xFDFF
+        or 0xFE70 <= code <= 0xFEFF
+    )
+
+
+def is_ocr_garbled(text: str) -> bool:
+    """Return True if OCR output looks like garbage (random chars, numbers only).
+
+    Detects the common failure mode where UTRNet crashes and PaddleOCR
+    English fallback produces meaningless output on an Urdu image.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return True
+    chars = [ch for ch in stripped if not ch.isspace()]
+    if not chars:
+        return True
+    total = len(chars)
+    urdu_count = sum(1 for ch in chars if _is_urdu_char(ch))
+    alpha_count = sum(1 for ch in chars if ch.isalpha())
+    digit_count = sum(1 for ch in chars if ch.isdigit())
+    # If mostly digits or punctuation, it's garbage
+    if digit_count > total * 0.5:
+        return True
+    # If very little actual alphabetic content (Urdu or Latin), it's garbage
+    if alpha_count < total * 0.3:
+        return True
+    # If almost no Urdu and very short meaningful text, likely garbled
+    if urdu_count < total * 0.05 and alpha_count < 15:
+        return True
+    return False
+
+
 def strip_bidi_marks(text: str) -> str:
     """Remove bidi isolate control characters (for consumers that can't handle
     them)."""

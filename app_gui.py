@@ -80,6 +80,12 @@ def main(st=None, ingestor=None, agent=None):
         if not text or not text.strip():
             st.warning("کوئی متن نکالا نہیں جا سکا / No text was extracted.")
             st.stop()
+        if report.get("metadata", {}).get("ocr_garbled"):
+            st.warning(
+                "تصحیح OCR ناکام رہی / OCR failed to read this image properly. "
+                "براہ کرم واضح تصویر اپ لوڈ کریں / Please upload a clearer image."
+            )
+            st.stop()
         with st.spinner("Processing Media..."):
             result = agent.run(text)
 
@@ -114,10 +120,13 @@ def _ensure_api_key(st):
 def _ensure_models():
     root = Path(__file__).resolve().parent
     models_dir = root / "models"
+    # On Hugging Face Spaces, models live under /home/user/app/models
+    if os.environ.get("SPACE_ID"):
+        models_dir = Path("/home/user/app/models")
     if all((models_dir / name).is_file() for name in _MODEL_FILES):
         return
     subprocess.run(
-        [sys.executable, str(root / "tools" / "download_urdu_models.py")],
+        [sys.executable, str(root / "download_models.py")],
         check=True,
     )
 
